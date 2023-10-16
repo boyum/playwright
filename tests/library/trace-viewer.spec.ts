@@ -789,7 +789,7 @@ test('should include requestUrl in route.fulfill', async ({ page, runAndTrace, b
   await traceViewer.page.locator('.tabbed-pane-tab-label', { hasText: 'Call' }).click();
   const callLine = traceViewer.page.locator('.call-line');
   await expect(callLine.getByText('status')).toContainText('200');
-  await expect(callLine.getByText('requestUrl')).toContainText('http://test.com');
+  await expect(callLine.getByText('requestUrl')).toContainText(/https?:\/\/test\.com\//);
 });
 
 test('should not crash with broken locator', async ({ page, runAndTrace, server }) => {
@@ -805,21 +805,26 @@ test('should not crash with broken locator', async ({ page, runAndTrace, server 
   await expect(header).toBeVisible();
 });
 
-test('should include requestUrl in route.continue', async ({ page, runAndTrace, server }) => {
-  await page.route('**/*', route => {
-    void route.continue({ url: server.EMPTY_PAGE });
-  });
-  const traceViewer = await runAndTrace(async () => {
-    await page.goto('http://test.com');
-  });
+test.describe(() => {
+  test.use({ ignoreHTTPSErrors: true });
+  test('should include requestUrl in route.continue', async ({ page, runAndTrace, server, httpsServer }) => {
+    await page.route('**/*', route => {
+      const url = route.request().url().startsWith('https://') ? httpsServer.EMPTY_PAGE : server.EMPTY_PAGE;
+      void route.continue({ url });
+    });
+    const traceViewer = await runAndTrace(async () => {
+      await page.goto('http://test.com');
+    });
 
-  // Render snapshot, check expectations.
-  await traceViewer.selectAction('route.continue');
-  await traceViewer.page.locator('.tabbed-pane-tab-label', { hasText: 'Call' }).click();
-  const callLine = traceViewer.page.locator('.call-line');
-  await expect(callLine.getByText('requestUrl')).toContainText('http://test.com');
-  await expect(callLine.getByText(/^url:.*/)).toContainText(server.EMPTY_PAGE);
+    // Render snapshot, check expectations.
+    await traceViewer.selectAction('route.continue');
+    await traceViewer.page.locator('.tabbed-pane-tab-label', { hasText: 'Call' }).click();
+    const callLine = traceViewer.page.locator('.call-line');
+    await expect(callLine.getByText('requestUrl')).toContainText(/https?:\/\/test\.com\//);
+    await expect(callLine.getByText(/^url:.*/)).toContainText(/https?:\/\/localhost:\d+\/empty\.html/);
+  });
 });
+
 
 test('should include requestUrl in route.abort', async ({ page, runAndTrace, server }) => {
   await page.route('**/*', route => {
@@ -833,7 +838,7 @@ test('should include requestUrl in route.abort', async ({ page, runAndTrace, ser
   await traceViewer.selectAction('route.abort');
   await traceViewer.page.locator('.tabbed-pane-tab-label', { hasText: 'Call' }).click();
   const callLine = traceViewer.page.locator('.call-line');
-  await expect(callLine.getByText('requestUrl')).toContainText('http://test.com');
+  await expect(callLine.getByText('requestUrl')).toContainText(/https?:\/\/test\.com\//);
 });
 
 test('should serve overridden request', async ({ page, runAndTrace, server }) => {
